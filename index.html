@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeCollab - Real-time Coding Together</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.47.0/min/vs/loader.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.47.0/min/vs/editor/editor.main.nls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.47.0/min/vs/editor/editor.main.js"></script>
+    <style>
+        #editor {
+            height: 70vh;
+            border-radius: 0.5rem;
+        }
+        .chat-message {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-900 to-gray-800 min-h-screen text-gray-100">
+    <div id="vanta-bg" class="fixed inset-0 -z-10"></div>
+    
+    <header class="border-b border-gray-700 bg-gray-900/50 backdrop-blur-sm">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i data-feather="code" class="text-green-400"></i>
+                <h1 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-blue-500">
+                    CodeCollab
+                </h1>
+            </div>
+            <nav>
+                <ul class="flex space-x-6">
+                    <li><a href="#" class="hover:text-green-400 transition">Docs</a></li>
+                    <li><a href="#" class="hover:text-green-400 transition">About</a></li>
+                    <li><a href="#" class="px-4 py-2 bg-green-500 hover:bg-green-600 rounded-md transition">Login</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-8">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left Panel - Room Info -->
+            <div class="bg-gray-800/70 rounded-xl p-6 border border-gray-700 backdrop-blur-sm">
+                <h2 class="text-xl font-semibold mb-4 flex items-center">
+                    <i data-feather="users" class="mr-2"></i> Room Information
+                </h2>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Room ID</label>
+                        <div class="flex">
+                            <input type="text" id="room-id" class="flex-1 bg-gray-700 border border-gray-600 rounded-l-md px-3 py-2 text-sm" readonly>
+                            <button onclick="copyRoomId()" class="bg-gray-600 hover:bg-gray-500 px-3 rounded-r-md transition">
+                                <i data-feather="copy"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Invite Link</label>
+                        <div class="flex">
+                            <input type="text" id="invite-link" class="flex-1 bg-gray-700 border border-gray-600 rounded-l-md px-3 py-2 text-sm" readonly>
+                            <button onclick="copyInviteLink()" class="bg-gray-600 hover:bg-gray-500 px-3 rounded-r-md transition">
+                                <i data-feather="copy"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Language</label>
+                        <select id="language-select" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm">
+                            <option value="javascript">JavaScript</option>
+                            <option value="python">Python</option>
+                            <option value="java">Java</option>
+                            <option value="html">HTML</option>
+                            <option value="css">CSS</option>
+                            <option value="typescript">TypeScript</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Participants</label>
+                        <div id="participants-list" class="bg-gray-700 rounded-md p-3 max-h-32 overflow-y-auto">
+                            <div class="flex items-center space-x-2 py-1">
+                                <span class="h-2 w-2 rounded-full bg-green-400"></span>
+                                <span>You (Host)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Center Panel - Code Editor -->
+            <div class="lg:col-span-2">
+                <div id="editor" class="w-full"></div>
+            </div>
+        </div>
+        
+        <!-- Bottom Panel - Chat -->
+        <div class="mt-6 bg-gray-800/70 rounded-xl p-6 border border-gray-700 backdrop-blur-sm">
+            <h2 class="text-xl font-semibold mb-4 flex items-center">
+                <i data-feather="message-square" class="mr-2"></i> Chat
+            </h2>
+            
+            <div id="chat-messages" class="bg-gray-700 rounded-md p-4 h-48 overflow-y-auto mb-4 space-y-2">
+                <div class="chat-message">
+                    <span class="text-green-400 font-medium">System:</span> Welcome to CodeCollab! Start coding with your team.
+                </div>
+            </div>
+            
+            <div class="flex space-x-2">
+                <input type="text" id="chat-input" placeholder="Type a message..." 
+                    class="flex-1 bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+                <button onclick="sendMessage()" class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded-md transition">
+                    <i data-feather="send"></i>
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.globe.min.js"></script>
+    <script>
+        // Initialize Vanta.js background
+        VANTA.GLOBE({
+            el: "#vanta-bg",
+            mouseControls: true,
+            touchControls: true,
+            gyroControls: false,
+            minHeight: 200.00,
+            minWidth: 200.00,
+            scale: 1.00,
+            scaleMobile: 1.00,
+            color: 0x3f83f8,
+            backgroundColor: 0x111827,
+            size: 0.8
+        });
+
+        // Initialize Monaco Editor
+        require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.47.0/min/vs' }});
+        require(['vs/editor/editor.main'], function() {
+            window.editor = monaco.editor.create(document.getElementById('editor'), {
+                value: '// Welcome to CodeCollab!\n// Start coding with your team in real-time\n\nfunction helloWorld() {\n  console.log("Hello, collaborative world!");\n}\n\nhelloWorld();',
+                language: 'javascript',
+                theme: 'vs-dark',
+                automaticLayout: true,
+                minimap: { enabled: true },
+                fontSize: 14,
+                scrollBeyondLastLine: false
+            });
+            
+            // Auto-resize editor when window changes
+            window.addEventListener('resize', function() {
+                window.editor.layout();
+            });
+        });
+
+        // Socket.IO connection
+        const socket = io();
+        
+        // Generate random room ID
+        const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+        document.getElementById('room-id').value = roomId;
+        document.getElementById('invite-link').value = `${window.location.origin}?room=${roomId}`;
+        
+        // Join room
+        socket.emit('join-room', roomId);
+        
+        // Language selection change
+        document.getElementById('language-select').addEventListener('change', function(e) {
+            const language = e.target.value;
+            monaco.editor.setModelLanguage(window.editor.getModel(), language);
+            socket.emit('language-change', { roomId, language });
+        });
+        
+        // Editor content change
+        window.editor.onDidChangeModelContent(function(e) {
+            const content = window.editor.getValue();
+            socket.emit('code-change', { roomId, content });
+        });
+        
+        // Socket listeners
+        socket.on('code-update', function(content) {
+            const currentPosition = window.editor.getPosition();
+            window.editor.setValue(content);
+            window.editor.setPosition(currentPosition);
+        });
+        
+        socket.on('language-update', function(language) {
+            document.getElementById('language-select').value = language;
+            monaco.editor.setModelLanguage(window.editor.getModel(), language);
+        });
+        
+        socket.on('user-joined', function(username) {
+            addParticipant(username);
+            addChatMessage('System', `${username} joined the session`);
+        });
+        
+        socket.on('user-left', function(username) {
+            removeParticipant(username);
+            addChatMessage('System', `${username} left the session`);
+        });
+        
+        socket.on('chat-message', function({ sender, message }) {
+            addChatMessage(sender, message);
+        });
+        
+        // Chat functions
+        function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            
+            if (message) {
+                socket.emit('send-chat', { roomId, message });
+                addChatMessage('You', message);
+                input.value = '';
+            }
+        }
+        
+        function addChatMessage(sender, message) {
+            const chatContainer = document.getElementById('chat-messages');
+            const messageElement = document.createElement('div');
+            messageElement.className = 'chat-message';
+            
+            if (sender === 'You') {
+                messageElement.innerHTML = `<span class="text-blue-400 font-medium">You:</span> ${message}`;
+            } else if (sender === 'System') {
+                messageElement.innerHTML = `<span class="text-green-400 font-medium">System:</span> ${message}`;
+            } else {
+                messageElement.innerHTML = `<span class="text-purple-400 font-medium">${sender}:</span> ${message}`;
+            }
+            
+            chatContainer.appendChild(messageElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        
+        // Participant functions
+        function addParticipant(username) {
+            const participantsList = document.getElementById('participants-list');
+            const participantElement = document.createElement('div');
+            participantElement.className = 'flex items-center space-x-2 py-1';
+            participantElement.innerHTML = `<span class="h-2 w-2 rounded-full bg-green-400"></span><span>${username}</span>`;
+            participantsList.appendChild(participantElement);
+        }
+        
+        function removeParticipant(username) {
+            const participants = document.querySelectorAll('#participants-list div');
+            participants.forEach(participant => {
+                if (participant.textContent.includes(username)) {
+                    participant.remove();
+                }
+            });
+        }
+        
+        // Utility functions
+        function copyRoomId() {
+            const roomIdInput = document.getElementById('room-id');
+            roomIdInput.select();
+            document.execCommand('copy');
+            showTooltip('Room ID copied!');
+        }
+        
+        function copyInviteLink() {
+            const inviteLinkInput = document.getElementById('invite-link');
+            inviteLinkInput.select();
+            document.execCommand('copy');
+            showTooltip('Invite link copied!');
+        }
+        
+        function showTooltip(message) {
+            const tooltip = document.createElement('div');
+            tooltip.className = 'fixed bottom-4 right-4 bg-gray-800 text-white px-4 py-2 rounded-md shadow-lg';
+            tooltip.textContent = message;
+            document.body.appendChild(tooltip);
+            
+            setTimeout(() => {
+                tooltip.remove();
+            }, 2000);
+        }
+        
+        // Initialize Feather Icons
+        feather.replace();
+    </script>
+</body>
+</html>
